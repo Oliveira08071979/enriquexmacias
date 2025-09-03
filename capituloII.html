@@ -193,7 +193,7 @@
     async function loadCSV() {
       try {
         const res = await fetch('capituloII.csv', { cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudo cargar lista.csv');
+        if (!res.ok) throw new Error('No existe ninguna pista de audio en este capítulo');
         const text = await res.text();
         const data = parseCSV(text);
         renderList(data);
@@ -205,7 +205,7 @@
 
     function renderList(items) {
       if (!items.length) {
-        listEl.innerHTML = `<div style="opacity:.8">El CSV está vacío.</div>`;
+        listEl.innerHTML = `<div style="opacity:.8">No existe ninguna pista de audio en este capítulo</div>`;
         return;
       }
       const frag = document.createDocumentFragment();
