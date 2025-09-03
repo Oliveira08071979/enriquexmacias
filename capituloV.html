@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CAPÍTULO II</title>
+  <title>CAPÍTULO V</title>
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'">
   <style>
@@ -40,7 +40,7 @@
 <body oncontextmenu="return false;">
 
   <header>
-    <h1>CAPÍTULO II</h1>
+    <h1>CAPÍTULO V</h1>
     <p class="sub">Selecciona una pista para reproducir</p>
   </header>
 
@@ -165,8 +165,8 @@
 
     async function loadCSV() {
       try {
-        const res = await fetch('capituloII.csv', { cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudo cargar capituloII.csv');
+        const res = await fetch('capituloV.csv', { cache: 'no-store' });
+        if (!res.ok) throw new Error('No se pudo cargar capituloV.csv');
         const raw = cleanText(await res.text());
         const delim = detectDelim(raw);
         const rows = parseWithDelim(raw, delim);
@@ -176,7 +176,7 @@
       } catch (err) {
         console.error(err);
         listEl.innerHTML = `<div style="opacity:.8">
-          No se pudo cargar <code>capituloII.csv</code>. Asegúrate de que está en la misma carpeta que este <code>index.html</code>.
+          No se pudo cargar <code>capituloV.csv</code>. Asegúrate de que está en la misma carpeta que este <code>index.html</code>.
         </div>`;
       }
     }
