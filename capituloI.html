@@ -3,100 +3,212 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Reproductor seguro</title>
+  <title>CAPÍTULO I</title>
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; media-src https://dl.dropboxusercontent.com/scl/fi/b9wgabg2anwul9nid2rxo/El-itinerario-de-las-palmeras-I-grabaci-n-obra-1400-00.aif?rlkey=fk58gmkjqsu3af8ob5rtibkb1&dl=0; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'">
+        content="default-src 'self'; media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'">
   <style>
-    html, body { height: 100%; margin: 0; background:#0b0b0c; color:#eee; font-family: system-ui, Arial, sans-serif; }
-    .wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; user-select: none; }
-    .card { width: min(800px, 92vw); background:#141416; border: 1px solid #26262a; border-radius: 16px; padding: 20px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
-    h1 { font-size: 1.1rem; margin: 0 0 12px; font-weight: 600; color:#fafafa; text-align:center; }
-    .player { display: grid; gap: 16px; }
-    audio, video { width: 100%; outline: none; border-radius: 10px; background:#000; }
-    /* Evita arrastrar/seleccionar */
-    * { -webkit-user-drag: none; }
+    :root { color-scheme: dark light; }
+    html, body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0b0c; color:#eee; }
+    header { text-align:center; padding:40px 16px 20px; }
+    h1 { margin:0; font-size: clamp(1.6rem, 3.5vw, 2.4rem); }
+    p.sub { margin:.4rem 0 0; color:#b7b7bd; }
+    main { max-width:900px; margin: 0 auto; padding: 24px 16px 60px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; }
+    button.item {
+      background:#1a1b1e; border:1px solid #2a2c31; color:#fff; padding:14px 16px;
+      border-radius:12px; cursor:pointer; text-align:left; transition: transform .06s ease, background .2s;
+      user-select:none; outline:none;
+    }
+    button.item:hover { background:#1e2025; }
+    button.item:active { transform: translateY(1px); }
+    .item .title { font-weight:600; font-size:1rem; line-height:1.2; }
+    .item .hint { font-size:.8rem; opacity:.8; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.6); backdrop-filter: blur(2px); }
+    .modal.open { display:grid; }
+    .card { width:min(860px,92vw); background:#141416; border:1px solid #26262a; border-radius:16px; padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.55); }
+    .card header { padding:0 6px 10px; text-align:left; }
+    .card h2 { margin:0; font-size:1.1rem; }
+    .player { display:block; }
+    audio, video { width:100%; border-radius:10px; background:#000; outline:none; }
+    .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+    .close { border:1px solid #2a2c31; background:#1b1c20; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
+    .close:hover { background:#202228; }
+    .footer-note { margin-top:10px; font-size:.8rem; color:#a4a4aa; text-align:right; }
   </style>
 </head>
-<body>
-  <div class="wrap" oncontextmenu="return false;">
-    <div class="card">
-      <h1>Reproducción</h1>
+<body oncontextmenu="return false;">
 
-      <!-- ▶️ Sustituye la URL por tu enlace "raw=1" de Dropbox -->
-      <!-- Si es AUDIO, deja el <audio>. Si es VÍDEO, usa el <video> comentado. -->
+  <header>
+    <h1>CAPÍTULO I</h1>
+    <p class="sub">Selecciona una pista para reproducir</p>
+  </header>
 
-      <div class="player" id="playerArea">
-        <!-- AUDIO -->
-        <audio id="media" controls controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
-               preload="metadata" src="https://dl.dropboxusercontent.com/scl/fi/b9wgabg2anwul9nid2rxo/El-itinerario-de-las-palmeras-I-grabaci-n-obra-1400-00.aif?rlkey=fk58gmkjqsu3af8ob5rtibkb1&dl=0">
-            Tu navegador no soporta el elemento de audio.
-        </audio>
+  <main>
+    <div id="list" class="grid" aria-live="polite"></div>
+  </main>
 
-        <!-- VÍDEO (alternativa). Comenta el <audio> de arriba y descomenta esto si tu archivo es .mp4/.mov -->
-        <!--
-        <video id="media" controls controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
-               preload="metadata" playsinline
-               src="https://www.dropbox.com/s/ID/archivo.mp4?raw=1">
-            Tu navegador no soporta el elemento de vídeo.
-        </video>
-        -->
-      </div>
-      <noscript>Activa JavaScript para reforzar la protección.</noscript>
+  <!-- MODAL -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="card" oncontextmenu="return false;">
+      <header class="row">
+        <h2 id="modalTitle">Reproducción</h2>
+        <button class="close" id="closeBtn" type="button" aria-label="Cerrar">Cerrar ✕</button>
+      </header>
+      <div class="player" id="playerArea"></div>
+      <div class="footer-note">Roberto Oliveira-Ogando</div>
     </div>
   </div>
 
   <script>
-    // Bloquear clic derecho, arrastre, selección y algunos atajos comunes
-    const root = document.documentElement;
-    const media = document.getElementById('media');
-
-    // Evitar menú contextual en toda la página
-    document.addEventListener('contextmenu', e => e.preventDefault());
-
-    // Evitar arrastrar
+    // Bloqueos básicos
     document.addEventListener('dragstart', e => e.preventDefault());
-
-    // Evitar selección / copia
     document.addEventListener('selectstart', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
-
-    // Bloquear teclas típicas (no es infalible, pero reduce)
     document.addEventListener('keydown', e => {
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
-      const forbidden = (
-        // Guardar/Imprimir/Ver código/Descargar/DevTools/Fullscreen
-        (ctrl && ['s','p','u','o','i','j','c','+', '-', '0'].includes(key)) ||
-        (key === 'f12') || (key === 'printscreen') ||
-        (key === 'enter' && (e.altKey || e.ctrlKey || e.metaKey)) ||
-        (key === 'f11')
-      );
-      if (forbidden) {
-        e.preventDefault();
-        e.stopPropagation();
-        return false;
-      }
+      const blocked =
+        (ctrl && ['s','p','u','o','i','j','c','+','-','0','a'].includes(key)) ||
+        (key === 'f12') || (key === 'printscreen') || (key === 'f11');
+      if (blocked) { e.preventDefault(); e.stopPropagation(); return false; }
     }, true);
 
-    // Quitar Picture-in-Picture si el navegador lo permite
-    try {
-      if ('disablePictureInPicture' in HTMLVideoElement.prototype && media.tagName === 'VIDEO') {
-        media.disablePictureInPicture = true;
+    const listEl   = document.getElementById('list');
+    const modal    = document.getElementById('modal');
+    const modalT   = document.getElementById('modalTitle');
+    const closeBtn = document.getElementById('closeBtn');
+    const playerA  = document.getElementById('playerArea');
+
+    closeBtn.addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+    function closeModal() {
+      const media = document.getElementById('media');
+      if (media) { try { media.pause(); } catch {} }
+      playerA.innerHTML = '';
+      modal.classList.remove('open');
+    }
+
+    function isAudio(url) { return /\.(mp3|m4a|aac|wav|ogg)(\?|#|$)/i.test(url); }
+    function isVideo(url) { return /\.(mp4|mov|webm|mkv)(\?|#|$)/i.test(url); }
+
+    function openPlayer(title, url) {
+      modalT.textContent = title || 'Reproducción';
+      const safeUrl = String(url || '').trim();
+      const tag = isVideo(safeUrl) ? 'video' : 'audio';
+
+      playerA.innerHTML = `
+        <${tag} id="media" controls
+          controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
+          preload="metadata" ${tag==='video' ? 'playsinline' : ''} src="${safeUrl}">
+          Tu navegador no soporta el elemento de ${tag}.
+        </${tag}>`;
+
+      const media = document.getElementById('media');
+      if (media) {
+        media.addEventListener('contextmenu', e => e.preventDefault());
+        media.addEventListener('dragstart', e => e.preventDefault());
+        try {
+          if (media.tagName === 'VIDEO' && 'disablePictureInPicture' in HTMLVideoElement.prototype) {
+            media.disablePictureInPicture = true;
+          }
+        } catch {}
       }
-    } catch {}
+      modal.classList.add('open');
+    }
 
-    // Evitar atajos sobre el reproductor
-    media && media.addEventListener('contextmenu', e => e.preventDefault());
-    media && media.addEventListener('dragstart', e => e.preventDefault());
+    // -------- CSV ROBUSTO --------
+    function cleanText(t) { return t.replace(/^\uFEFF/, ''); }
+    function parseWithDelim(text, delim) {
+      const out = [];
+      let row = [], field = '', inQ = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQ) {
+          if (ch === '"') { if (text[i+1] === '"') { field += '"'; i++; } else { inQ = false; } }
+          else field += ch;
+        } else {
+          if (ch === '"') inQ = true;
+          else if (ch === delim) { row.push(field); field = ''; }
+          else if (ch === '\n') { row.push(field); out.push(row); row = []; field = ''; }
+          else if (ch === '\r') { /* skip */ }
+          else field += ch;
+        }
+      }
+      if (field.length || row.length) { row.push(field); out.push(row); }
+      return out;
+    }
+    function detectDelim(text) {
+      const candidates = [',',';','\t','|'];
+      let best = ',', bestScore = -1;
+      for (const d of candidates) {
+        const rows = parseWithDelim(text, d);
+        const useful = rows.filter(r => r.some(c => c && c.trim() !== ''));
+        const widths = useful.map(r => r.length);
+        const avg = widths.length ? (widths.reduce((a,b)=>a+b,0)/widths.length) : 0;
+        if (avg > bestScore) { bestScore = avg; best = d; }
+      }
+      return best;
+    }
 
-    // Evita abrir en nueva pestaña al hacer middle-click accidental
-    document.addEventListener('auxclick', e => {
-      if (e.button === 1) e.preventDefault();
-    });
+    // ✱ CAMBIO: ahora devolvemos [titulo, url, desc]
+    function toTriples(rows) {
+      rows = rows.map(r => r.map(c => (c||'').trim()));
+      const looksHeader = rows.length && rows[0][1] && !/^https?:\/\//i.test(rows[0][1]);
+      if (looksHeader) rows = rows.slice(1);
+      return rows
+        .map(r => [r[0] || '', r[1] || '', r[2] || ''])   // ✱
+        .filter(([t,u]) => t && u);
+    }
 
-    // Opcional: Autoplay silencioso (si quieres que inicie solo en audio)
-    // media && media.play().catch(()=>{ /* Algunos navegadores bloquean autoplay */ });
+    async function loadCSV() {
+      try {
+        const res = await fetch('capituloI.csv', { cache: 'no-store' });
+        if (!res.ok) throw new Error('No se pudo cargar capituloII.csv');
+        const raw = cleanText(await res.text());
+        const delim = detectDelim(raw);
+        const rows = parseWithDelim(raw, delim);
+        const data = toTriples(rows);                      // ✱
+
+        renderList(data);
+      } catch (err) {
+        console.error(err);
+        listEl.innerHTML = `<div style="opacity:.8">
+          No se pudo cargar <code>capituloII.csv</code>. Asegúrate de que está en la misma carpeta que este <code>index.html</code>.
+        </div>`;
+      }
+    }
+
+    function renderList(items) {
+      if (!items.length) {
+        listEl.innerHTML = `<div style="opacity:.8">No existe ninguna pista de audio en este capítulo.</div>`;
+        return;
+      }
+      const frag = document.createDocumentFragment();
+      for (const [title, url, desc] of items) {           // ✱
+        const hint = desc ? desc : trimUrl(url);          // ✱
+        const btn = document.createElement('button');
+        btn.className = 'item';
+        btn.type = 'button';
+        btn.innerHTML = `
+          <div class="title">${escapeHTML(title)}</div>
+          <div class="hint">${escapeHTML(hint)}</div>     <!-- ✱ -->
+        `;
+        btn.addEventListener('click', () => openPlayer(title, url));
+        frag.appendChild(btn);
+      }
+      listEl.innerHTML = '';
+      listEl.appendChild(frag);
+    }
+
+    function trimUrl(u) { try { return new URL(u).hostname; } catch { return u; } }
+    function escapeHTML(s) {
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    loadCSV();
   </script>
 </body>
 </html>
