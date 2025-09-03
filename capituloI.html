@@ -166,7 +166,7 @@
     async function loadCSV() {
       try {
         const res = await fetch('capituloI.csv', { cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudo cargar capituloII.csv');
+        if (!res.ok) throw new Error('No se pudo cargar capituloI.csv');
         const raw = cleanText(await res.text());
         const delim = detectDelim(raw);
         const rows = parseWithDelim(raw, delim);
@@ -176,7 +176,7 @@
       } catch (err) {
         console.error(err);
         listEl.innerHTML = `<div style="opacity:.8">
-          No se pudo cargar <code>capituloII.csv</code>. Asegúrate de que está en la misma carpeta que este <code>index.html</code>.
+          No se pudo cargar <code>capituloI.csv</code>. Asegúrate de que está en la misma carpeta que este <code>index.html</code>.
         </div>`;
       }
     }
