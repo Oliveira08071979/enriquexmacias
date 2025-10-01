@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CAPÍTULO IV</title>
 
-  <!-- CSP: permitir iframes a Dropbox para el PDF -->
+  <!-- CSP actualizada: permite blob: en frame-src y peticiones a Dropbox -->
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self';
-                 connect-src 'self';
+                 connect-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com;
                  media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
-                 frame-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
+                 frame-src 'self' blob: https://www.dropbox.com https://dl.dropboxusercontent.com;
                  img-src 'self' data:;
                  style-src 'self' 'unsafe-inline';
                  script-src 'self' 'unsafe-inline';
@@ -117,6 +117,47 @@
     const playerA  = document.getElementById('playerArea');
     const openPdfBtn = document.getElementById('openPdfBtn');
 
+    // --- Helpers PDF inline (blob) ---
+    function normalizeDropbox(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname.endsWith('dropbox.com')) {
+          u.hostname = 'dl.dropboxusercontent.com';
+          u.search = ''; // fuera dl/raw params
+          return u.toString();
+        }
+        return url;
+      } catch {
+        return url;
+      }
+    }
+
+    let _pdfObjectUrl = null;
+
+    async function showPdfInIframe(srcUrl) {
+      // limpiar blob anterior
+      if (_pdfObjectUrl) {
+        URL.revokeObjectURL(_pdfObjectUrl);
+        _pdfObjectUrl = null;
+      }
+      const frame = document.getElementById('pdfFrame');
+      if (!frame) return;
+
+      const normalized = normalizeDropbox(srcUrl);
+
+      try {
+        const res = await fetch(normalized, { mode: 'cors', cache: 'no-store' });
+        if (!res.ok) throw new Error('No se pudo obtener el PDF');
+        const buf = await res.arrayBuffer();
+        const blob = new Blob([buf], { type: 'application/pdf' });
+        _pdfObjectUrl = URL.createObjectURL(blob);
+        frame.src = _pdfObjectUrl;
+      } catch (e) {
+        // Fallback: intenta cargar la URL directa si fetch/CORS falla
+        frame.src = normalized + '#view=FitH&toolbar=1';
+      }
+    }
+
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
@@ -126,6 +167,11 @@
       playerA.innerHTML = '';
       openPdfBtn.style.display = 'none';
       openPdfBtn.href = '#';
+      // liberar blob del PDF
+      if (_pdfObjectUrl) {
+        URL.revokeObjectURL(_pdfObjectUrl);
+        _pdfObjectUrl = null;
+      }
       modal.classList.remove('open');
     }
 
@@ -151,7 +197,7 @@
       const pdfPane = safePDF ? `
         <div class="pane">
           <h3>Documento</h3>
-          <iframe class="pdf" title="Documento PDF" src="${safePDF}#view=FitH&toolbar=1"></iframe>
+          <iframe id="pdfFrame" class="pdf" title="Documento PDF"></iframe>
         </div>` : '';
 
       playerA.innerHTML = `<div class="split">${avPane}${pdfPane}</div>`;
@@ -170,6 +216,7 @@
       if (safePDF) {
         openPdfBtn.href = safePDF;
         openPdfBtn.style.display = '';
+        showPdfInIframe(safePDF);
       } else {
         openPdfBtn.style.display = 'none';
         openPdfBtn.href = '#';
@@ -212,7 +259,7 @@
       return best;
     }
 
-    // ✱ Ahora devolvemos [titulo, media, desc, pdf]
+    // Ahora devolvemos [titulo, media, desc, pdf]
     function toQuads(rows) {
       rows = rows.map(r => r.map(c => (c||'').trim()));
       const looksHeader = rows.length && rows[0][1] && !/^https?:\/\//i.test(rows[0][1]);
