@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Visor PDF</title>
+  <style>
+    html,body{margin:0;background:#0f0f11;color:#ddd;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    #wrap{padding:8px 8px 24px}
+    .page{display:block;margin:0 auto 12px;background:#111;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+    #msg{position:fixed;left:8px;right:8px;bottom:8px;font-size:.85rem;opacity:.8}
+  </style>
+</head>
+<body oncontextmenu="return false">
+<div id="wrap"></div>
+<div id="msg"></div>
+
+<!-- PDF.js desde CDN (compatible con Dreamweaver Live View) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script>
+  // Bloqueos básicos dentro del visor
+  document.addEventListener('contextmenu', e=>e.preventDefault());
+  document.addEventListener('keydown', e=>{
+    const k=e.key.toLowerCase(), ctrl=e.ctrlKey||e.metaKey;
+    if (ctrl && ['s','p','u','o','i','j','c','+','-','0','a'].includes(k)) { e.preventDefault(); e.stopPropagation(); }
+    if (k==='f12'||k==='printscreen'||k==='f11') { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  const wrap = document.getElementById('wrap');
+  const msg  = (t)=>{ document.getElementById('msg').textContent = t||''; };
+
+  async function renderAll(buffer){
+    msg('Cargando documento…');
+    const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+    msg('Renderizando…');
+    wrap.innerHTML = '';
+    for (let i=1;i<=pdf.numPages;i++){
+      const page = await pdf.getPage(i);
+      // Escala para encajar ancho de viewport con margen
+      const vw = Math.max(document.documentElement.clientWidth, window.innerWidth || 0) - 24;
+      const viewport = page.getViewport({ scale: 1 });
+      const scale = Math.min( vw / viewport.width, 1.8 ); // límite razonable
+      const v2 = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.className = 'page';
+      canvas.width  = Math.floor(v2.width);
+      canvas.height = Math.floor(v2.height);
+      wrap.appendChild(canvas);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: v2 }).promise;
+    }
+    msg('');
+  }
+
+  // Recibe ArrayBuffer por postMessage desde index.html
+  window.addEventListener('message', (ev)=>{
+    const data = ev.data || {};
+    if (data.type === 'PDF_ARRAYBUFFER' && data.payload) {
+      renderAll(data.payload).catch(e=>{ console.error(e); msg('No se pudo mostrar el PDF.'); });
+    }
+  }, false);
+</script>
+</body>
+</html>
