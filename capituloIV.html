@@ -5,16 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CAPÍTULO IV</title>
 
-  <!-- CSP actualizada: permite blob: en frame-src y peticiones a Dropbox -->
+  <!-- CSP: habilita blob:, Dropbox y cdnjs para PDF.js; bloquea descendientes externos -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 connect-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com;
-                 media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
-                 frame-src 'self' blob: https://www.dropbox.com https://dl.dropboxusercontent.com;
-                 img-src 'self' data:;
-                 style-src 'self' 'unsafe-inline';
-                 script-src 'self' 'unsafe-inline';
-                 frame-ancestors 'none'">
+        content="
+          default-src 'self';
+          connect-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com https://cdnjs.cloudflare.com;
+          img-src 'self' data:;
+          media-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com;
+          frame-src 'self' blob:;
+          script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+          style-src 'self' 'unsafe-inline';
+          frame-ancestors 'none'
+        ">
 
   <style>
     :root { color-scheme: dark light; }
@@ -61,10 +63,10 @@
     }
 
     .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    .close, .openpdf {
+    .close {
       border:1px solid #2a2c31; background:#1b1c20; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; text-decoration:none;
     }
-    .close:hover, .openpdf:hover { background:#202228; }
+    .close:hover { background:#202228; }
     .footer-bar { margin-top:10px; display:flex; justify-content:flex-end; gap:8px; }
     .footer-note { margin-left:auto; font-size:.8rem; color:#a4a4aa; align-self:center; }
   </style>
@@ -89,18 +91,18 @@
       </header>
       <div class="player" id="playerArea"></div>
       <div class="footer-bar">
-        <a id="openPdfBtn" class="openpdf" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir PDF en pestaña nueva ↗</a>
         <div class="footer-note">Roberto Oliveira-Ogando</div>
       </div>
     </div>
   </div>
 
   <script>
-    // Bloqueos básicos
+    // --------- Bloqueos básicos y atajos comunes ----------
     document.addEventListener('dragstart', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('keydown', e => {
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
@@ -115,48 +117,6 @@
     const modalT   = document.getElementById('modalTitle');
     const closeBtn = document.getElementById('closeBtn');
     const playerA  = document.getElementById('playerArea');
-    const openPdfBtn = document.getElementById('openPdfBtn');
-
-    // --- Helpers PDF inline (blob) ---
-    function normalizeDropbox(url) {
-      try {
-        const u = new URL(url);
-        if (u.hostname.endsWith('dropbox.com')) {
-          u.hostname = 'dl.dropboxusercontent.com';
-          u.search = ''; // fuera dl/raw params
-          return u.toString();
-        }
-        return url;
-      } catch {
-        return url;
-      }
-    }
-
-    let _pdfObjectUrl = null;
-
-    async function showPdfInIframe(srcUrl) {
-      // limpiar blob anterior
-      if (_pdfObjectUrl) {
-        URL.revokeObjectURL(_pdfObjectUrl);
-        _pdfObjectUrl = null;
-      }
-      const frame = document.getElementById('pdfFrame');
-      if (!frame) return;
-
-      const normalized = normalizeDropbox(srcUrl);
-
-      try {
-        const res = await fetch(normalized, { mode: 'cors', cache: 'no-store' });
-        if (!res.ok) throw new Error('No se pudo obtener el PDF');
-        const buf = await res.arrayBuffer();
-        const blob = new Blob([buf], { type: 'application/pdf' });
-        _pdfObjectUrl = URL.createObjectURL(blob);
-        frame.src = _pdfObjectUrl;
-      } catch (e) {
-        // Fallback: intenta cargar la URL directa si fetch/CORS falla
-        frame.src = normalized + '#view=FitH&toolbar=1';
-      }
-    }
 
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -165,19 +125,130 @@
       const media = document.getElementById('media');
       if (media) { try { media.pause(); } catch {} }
       playerA.innerHTML = '';
-      openPdfBtn.style.display = 'none';
-      openPdfBtn.href = '#';
-      // liberar blob del PDF
-      if (_pdfObjectUrl) {
-        URL.revokeObjectURL(_pdfObjectUrl);
-        _pdfObjectUrl = null;
-      }
+      // revocar blob del PDF si existiera (se gestiona dentro del visor)
       modal.classList.remove('open');
     }
 
     function isAudio(url) { return /\.(mp3|m4a|aac|wav|ogg)(\?|#|$)/i.test(url); }
     function isVideo(url) { return /\.(mp4|mov|webm|mkv)(\?|#|$)/i.test(url); }
 
+    // --------- Normaliza enlaces de Dropbox ----------
+    function normalizeDropbox(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname.endsWith('dropbox.com')) {
+          u.hostname = 'dl.dropboxusercontent.com';
+          u.search = '';
+          return u.toString();
+        }
+        return url;
+      } catch { return url; }
+    }
+
+    // --------- IFRAME VISOR PDF (sandbox sin descargas) ----------
+    let pdfIframe = null;
+    let revokePending = null;
+
+    function createPdfIframe() {
+      // iframe sin allow-downloads/top-navigation; solo scripts
+      const ifr = document.createElement('iframe');
+      ifr.className = 'pdf';
+      ifr.id = 'pdfFrame';
+      ifr.setAttribute('sandbox', 'allow-scripts'); // sin allow-same-origin => más restrictivo (no acceso a Storage), pero suficiente
+      // Cargamos un documento inline que incluye PDF.js desde cdnjs y pinta el PDF recibido por postMessage
+      const srcdoc = `
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+  html,body {margin:0;background:#0f0f11;color:#ddd;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  #c {display:block;width:100vw;height:100vh;background:#111}
+  #msg {position:fixed;inset:auto 8px 8px 8px;font-size:.85rem;opacity:.8}
+</style>
+</head>
+<body oncontextmenu="return false">
+<canvas id="c"></canvas>
+<div id="msg"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script>
+  // Bloqueos básicos dentro del visor
+  document.addEventListener('contextmenu', e=>e.preventDefault());
+  document.addEventListener('keydown', e=>{
+    const k=e.key.toLowerCase(), ctrl=e.ctrlKey||e.metaKey;
+    if (ctrl && ['s','p','u','o','i','j','c','+','-','0','a'].includes(k)) { e.preventDefault(); e.stopPropagation(); }
+    if (k==='f12'||k==='printscreen'||k==='f11') { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
+  const msg = (t)=>{ document.getElementById('msg').textContent = t||''; };
+  let rendering = false;
+
+  // Render simple: primera página a ancho del canvas; puedes extender a múltiples páginas si quieres
+  async function renderPdf(buffer){
+    if(rendering) return;
+    rendering = true;
+    try{
+      msg('Cargando documento…');
+      const pdf = await pdfjsLib.getDocument({data: buffer}).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1 });
+      const canvas = document.getElementById('c');
+      const ratio = Math.min( (innerWidth-0)/viewport.width, (innerHeight-0)/viewport.height );
+      const scaled = page.getViewport({ scale: ratio });
+      canvas.width = Math.floor(scaled.width);
+      canvas.height = Math.floor(scaled.height);
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport: scaled }).promise;
+      msg('');
+    }catch(e){
+      console.error(e);
+      msg('No se pudo mostrar el PDF.');
+    }finally{
+      rendering = false;
+    }
+  }
+
+  // Recibe ArrayBuffer por postMessage
+  window.addEventListener('message', (ev)=>{
+    try{
+      const {type, payload} = ev.data || {};
+      if(type==='PDF_ARRAYBUFFER' && payload){
+        renderPdf(payload);
+      }
+    }catch(e){}
+  }, false);
+</script>
+</body></html>`;
+      ifr.srcdoc = srcdoc;
+      return ifr;
+    }
+
+    async function loadPdfIntoIframe(pdfUrl) {
+      // limpiar iframe previo
+      if (pdfIframe && pdfIframe.parentNode) pdfIframe.parentNode.removeChild(pdfIframe);
+      pdfIframe = createPdfIframe();
+
+      // insertar en el panel ya creado
+      const mount = document.getElementById('pdfPaneMount');
+      if (mount) mount.appendChild(pdfIframe);
+
+      // traer PDF como ArrayBuffer
+      const normalized = normalizeDropbox(pdfUrl);
+      try {
+        const res = await fetch(normalized, { mode: 'cors', cache: 'no-store' });
+        if (!res.ok) throw new Error('fetch PDF: ' + res.status);
+        const buf = await res.arrayBuffer();
+        // enviar al iframe cuando esté listo
+        pdfIframe.addEventListener('load', ()=>{
+          pdfIframe.contentWindow?.postMessage({ type:'PDF_ARRAYBUFFER', payload: buf }, '*');
+        }, { once:true });
+      } catch (e) {
+        // Mensaje de error dentro del contenedor
+        if (mount) {
+          mount.innerHTML = '<div style="opacity:.8">No se pudo visualizar el PDF. Aloja el archivo en el mismo dominio o habilita CORS en el origen.</div>';
+        }
+        console.error(e);
+      }
+    }
+
+    // --------- Lógica del reproductor + visor ----------
     function openPlayer(title, mediaUrl, pdfUrl) {
       modalT.textContent = title || 'Reproducción';
       const safeMedia = String(mediaUrl || '').trim();
@@ -197,7 +268,7 @@
       const pdfPane = safePDF ? `
         <div class="pane">
           <h3>Documento</h3>
-          <iframe id="pdfFrame" class="pdf" title="Documento PDF"></iframe>
+          <div id="pdfPaneMount"></div>
         </div>` : '';
 
       playerA.innerHTML = `<div class="split">${avPane}${pdfPane}</div>`;
@@ -214,12 +285,7 @@
       }
 
       if (safePDF) {
-        openPdfBtn.href = safePDF;
-        openPdfBtn.style.display = '';
-        showPdfInIframe(safePDF);
-      } else {
-        openPdfBtn.style.display = 'none';
-        openPdfBtn.href = '#';
+        loadPdfIntoIframe(safePDF);
       }
 
       modal.classList.add('open');
@@ -259,7 +325,7 @@
       return best;
     }
 
-    // Ahora devolvemos [titulo, media, desc, pdf]
+    // CSV: [título, media, descripción, pdf]
     function toQuads(rows) {
       rows = rows.map(r => r.map(c => (c||'').trim()));
       const looksHeader = rows.length && rows[0][1] && !/^https?:\/\//i.test(rows[0][1]);
