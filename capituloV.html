@@ -5,16 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CAPÍTULO V</title>
 
-  <!-- CSP: permitir iframes a Dropbox para el PDF -->
+  <!-- Consejo: si Dreamweaver da guerra, comenta la CSP durante el diseño.
+       En producción puedes usar esta CSP (ajústala si usas otros dominios): -->
+  <!--
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 connect-src 'self';
-                 media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
-                 frame-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
-                 img-src 'self' data:;
-                 style-src 'self' 'unsafe-inline';
-                 script-src 'self' 'unsafe-inline';
-                 frame-ancestors 'none'">
+        content="
+          default-src 'self';
+          connect-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com https://cdnjs.cloudflare.com;
+          img-src 'self' data:;
+          media-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com;
+          frame-src 'self' blob:;
+          script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+          style-src 'self' 'unsafe-inline';
+          frame-ancestors 'none'
+        ">
+  -->
 
   <style>
     :root { color-scheme: dark light; }
@@ -52,19 +57,15 @@
     .pane {
       background:#0f0f11; border:1px solid #232327; border-radius:12px; padding:10px;
     }
-    .pane h3 {
-      margin:0 0 8px; font-size:.95rem; font-weight:600; color:#cfcfd6;
-    }
+    .pane h3 { margin:0 0 8px; font-size:.95rem; font-weight:600; color:#cfcfd6; }
     audio, video { width:100%; border-radius:10px; background:#000; outline:none; }
-    iframe.pdf {
-      width:100%; height:70vh; border:0; border-radius:10px; background:#1a1b1e;
-    }
+    iframe.pdf { width:100%; height:70vh; border:0; border-radius:10px; background:#1a1b1e; }
 
     .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    .close, .openpdf {
+    .close {
       border:1px solid #2a2c31; background:#1b1c20; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; text-decoration:none;
     }
-    .close:hover, .openpdf:hover { background:#202228; }
+    .close:hover { background:#202228; }
     .footer-bar { margin-top:10px; display:flex; justify-content:flex-end; gap:8px; }
     .footer-note { margin-left:auto; font-size:.8rem; color:#a4a4aa; align-self:center; }
   </style>
@@ -89,18 +90,18 @@
       </header>
       <div class="player" id="playerArea"></div>
       <div class="footer-bar">
-        <a id="openPdfBtn" class="openpdf" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir PDF en pestaña nueva ↗</a>
         <div class="footer-note">Roberto Oliveira-Ogando</div>
       </div>
     </div>
   </div>
 
   <script>
-    // Bloqueos básicos
+    /* Bloqueos básicos */
     document.addEventListener('dragstart', e => e.preventDefault());
     document.addEventListener('selectstart', e => e.preventDefault());
     document.addEventListener('copy', e => e.preventDefault());
     document.addEventListener('cut', e => e.preventDefault());
+    document.addEventListener('contextmenu', e => e.preventDefault());
     document.addEventListener('keydown', e => {
       const key = e.key.toLowerCase();
       const ctrl = e.ctrlKey || e.metaKey;
@@ -115,7 +116,6 @@
     const modalT   = document.getElementById('modalTitle');
     const closeBtn = document.getElementById('closeBtn');
     const playerA  = document.getElementById('playerArea');
-    const openPdfBtn = document.getElementById('openPdfBtn');
 
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -124,15 +124,44 @@
       const media = document.getElementById('media');
       if (media) { try { media.pause(); } catch {} }
       playerA.innerHTML = '';
-      openPdfBtn.style.display = 'none';
-      openPdfBtn.href = '#';
       modal.classList.remove('open');
     }
 
     function isAudio(url) { return /\.(mp3|m4a|aac|wav|ogg)(\?|#|$)/i.test(url); }
     function isVideo(url) { return /\.(mp4|mov|webm|mkv)(\?|#|$)/i.test(url); }
 
-    function openPlayer(title, mediaUrl, pdfUrl) {
+    /* Normaliza enlaces de Dropbox a descarga directa */
+    function normalizeDropbox(url) {
+      try {
+        const u = new URL(url);
+        if (u.hostname.endsWith('dropbox.com')) {
+          u.hostname = 'dl.dropboxusercontent.com';
+          u.search = '';
+          return u.toString();
+        }
+        return url;
+      } catch { return url; }
+    }
+
+    /* Crea/inyecta iframe del visor (viewer.html) */
+    function mountPdfViewer() {
+      const ifr = document.createElement('iframe');
+      ifr.className = 'pdf';
+      ifr.id = 'pdfFrame';
+      // sandbox sin downloads ni navegación
+      ifr.setAttribute('sandbox', 'allow-scripts');
+      ifr.src = 'viewer.html'; // archivo separado
+      return ifr;
+    }
+
+    async function fetchPdfArrayBuffer(url) {
+      const normalized = normalizeDropbox(url);
+      const res = await fetch(normalized, { mode: 'cors', cache: 'no-store' });
+      if (!res.ok) throw new Error('fetch PDF: ' + res.status);
+      return await res.arrayBuffer();
+    }
+
+    async function openPlayer(title, mediaUrl, pdfUrl) {
       modalT.textContent = title || 'Reproducción';
       const safeMedia = String(mediaUrl || '').trim();
       const safePDF   = String(pdfUrl || '').trim();
@@ -151,7 +180,7 @@
       const pdfPane = safePDF ? `
         <div class="pane">
           <h3>Documento</h3>
-          <iframe class="pdf" title="Documento PDF" src="${safePDF}#view=FitH&toolbar=1"></iframe>
+          <div id="pdfMount"></div>
         </div>` : '';
 
       playerA.innerHTML = `<div class="split">${avPane}${pdfPane}</div>`;
@@ -168,17 +197,26 @@
       }
 
       if (safePDF) {
-        openPdfBtn.href = safePDF;
-        openPdfBtn.style.display = '';
-      } else {
-        openPdfBtn.style.display = 'none';
-        openPdfBtn.href = '#';
+        const mount = document.getElementById('pdfMount');
+        const ifr = mountPdfViewer();
+        mount.appendChild(ifr);
+
+        // cuando el visor esté cargado, le mandamos el ArrayBuffer
+        ifr.addEventListener('load', async () => {
+          try {
+            const buf = await fetchPdfArrayBuffer(safePDF);
+            ifr.contentWindow?.postMessage({ type:'PDF_ARRAYBUFFER', payload: buf }, '*');
+          } catch (e) {
+            mount.innerHTML = '<div style="opacity:.8">No se pudo visualizar el PDF (CORS/origen).</div>';
+            console.error(e);
+          }
+        }, { once:true });
       }
 
       modal.classList.add('open');
     }
 
-    // -------- CSV ROBUSTO --------
+    /* ------- CSV robusto ------- */
     function cleanText(t) { return t.replace(/^\uFEFF/, ''); }
     function parseWithDelim(text, delim) {
       const out = [];
@@ -212,7 +250,7 @@
       return best;
     }
 
-    // ✱ Ahora devolvemos [titulo, media, desc, pdf]
+    // CSV: [título, media, descripción, pdf]
     function toQuads(rows) {
       rows = rows.map(r => r.map(c => (c||'').trim()));
       const looksHeader = rows.length && rows[0][1] && !/^https?:\/\//i.test(rows[0][1]);
