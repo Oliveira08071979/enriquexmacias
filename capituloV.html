@@ -4,8 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>CAPÍTULO V</title>
+
+  <!-- CSP: permitir iframes a Dropbox para el PDF -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; frame-ancestors 'none'">
+        content="default-src 'self';
+                 connect-src 'self';
+                 media-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
+                 frame-src https://www.dropbox.com https://dl.dropboxusercontent.com 'self';
+                 img-src 'self' data:;
+                 style-src 'self' 'unsafe-inline';
+                 script-src 'self' 'unsafe-inline';
+                 frame-ancestors 'none'">
+
   <style>
     :root { color-scheme: dark light; }
     html, body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#0b0b0c; color:#eee; }
@@ -26,15 +36,37 @@
 
     .modal { position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.6); backdrop-filter: blur(2px); }
     .modal.open { display:grid; }
-    .card { width:min(860px,92vw); background:#141416; border:1px solid #26262a; border-radius:16px; padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.55); }
+    .card { width:min(1100px,94vw); background:#141416; border:1px solid #26262a; border-radius:16px; padding:18px; box-shadow:0 10px 40px rgba(0,0,0,.55); }
     .card header { padding:0 6px 10px; text-align:left; }
     .card h2 { margin:0; font-size:1.1rem; }
     .player { display:block; }
+
+    /* Split AV + PDF */
+    .split {
+      display:grid; gap:14px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 900px) {
+      .split { grid-template-columns: 1fr 1fr; }
+    }
+    .pane {
+      background:#0f0f11; border:1px solid #232327; border-radius:12px; padding:10px;
+    }
+    .pane h3 {
+      margin:0 0 8px; font-size:.95rem; font-weight:600; color:#cfcfd6;
+    }
     audio, video { width:100%; border-radius:10px; background:#000; outline:none; }
+    iframe.pdf {
+      width:100%; height:70vh; border:0; border-radius:10px; background:#1a1b1e;
+    }
+
     .row { display:flex; justify-content:space-between; align-items:center; gap:8px; }
-    .close { border:1px solid #2a2c31; background:#1b1c20; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; }
-    .close:hover { background:#202228; }
-    .footer-note { margin-top:10px; font-size:.8rem; color:#a4a4aa; text-align:right; }
+    .close, .openpdf {
+      border:1px solid #2a2c31; background:#1b1c20; color:#fff; padding:8px 12px; border-radius:10px; cursor:pointer; text-decoration:none;
+    }
+    .close:hover, .openpdf:hover { background:#202228; }
+    .footer-bar { margin-top:10px; display:flex; justify-content:flex-end; gap:8px; }
+    .footer-note { margin-left:auto; font-size:.8rem; color:#a4a4aa; align-self:center; }
   </style>
 </head>
 <body oncontextmenu="return false;">
@@ -56,7 +88,10 @@
         <button class="close" id="closeBtn" type="button" aria-label="Cerrar">Cerrar ✕</button>
       </header>
       <div class="player" id="playerArea"></div>
-      <div class="footer-note">Roberto Oliveira-Ogando</div>
+      <div class="footer-bar">
+        <a id="openPdfBtn" class="openpdf" href="#" target="_blank" rel="noopener noreferrer" style="display:none">Abrir PDF en pestaña nueva ↗</a>
+        <div class="footer-note">Roberto Oliveira-Ogando</div>
+      </div>
     </div>
   </div>
 
@@ -80,6 +115,7 @@
     const modalT   = document.getElementById('modalTitle');
     const closeBtn = document.getElementById('closeBtn');
     const playerA  = document.getElementById('playerArea');
+    const openPdfBtn = document.getElementById('openPdfBtn');
 
     closeBtn.addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
@@ -88,23 +124,37 @@
       const media = document.getElementById('media');
       if (media) { try { media.pause(); } catch {} }
       playerA.innerHTML = '';
+      openPdfBtn.style.display = 'none';
+      openPdfBtn.href = '#';
       modal.classList.remove('open');
     }
 
     function isAudio(url) { return /\.(mp3|m4a|aac|wav|ogg)(\?|#|$)/i.test(url); }
     function isVideo(url) { return /\.(mp4|mov|webm|mkv)(\?|#|$)/i.test(url); }
 
-    function openPlayer(title, url) {
+    function openPlayer(title, mediaUrl, pdfUrl) {
       modalT.textContent = title || 'Reproducción';
-      const safeUrl = String(url || '').trim();
-      const tag = isVideo(safeUrl) ? 'video' : 'audio';
+      const safeMedia = String(mediaUrl || '').trim();
+      const safePDF   = String(pdfUrl || '').trim();
+      const tag = isVideo(safeMedia) ? 'video' : 'audio';
 
-      playerA.innerHTML = `
-        <${tag} id="media" controls
-          controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
-          preload="metadata" ${tag==='video' ? 'playsinline' : ''} src="${safeUrl}">
-          Tu navegador no soporta el elemento de ${tag}.
-        </${tag}>`;
+      const avPane = `
+        <div class="pane">
+          <h3>${tag === 'video' ? 'Vídeo' : 'Audio'}</h3>
+          <${tag} id="media" controls
+            controlsList="nodownload noplaybackrate noremoteplayback nofullscreen"
+            preload="metadata" ${tag==='video' ? 'playsinline' : ''} src="${safeMedia}">
+            Tu navegador no soporta el elemento de ${tag}.
+          </${tag}>
+        </div>`;
+
+      const pdfPane = safePDF ? `
+        <div class="pane">
+          <h3>Documento</h3>
+          <iframe class="pdf" title="Documento PDF" src="${safePDF}#view=FitH&toolbar=1"></iframe>
+        </div>` : '';
+
+      playerA.innerHTML = `<div class="split">${avPane}${pdfPane}</div>`;
 
       const media = document.getElementById('media');
       if (media) {
@@ -116,6 +166,15 @@
           }
         } catch {}
       }
+
+      if (safePDF) {
+        openPdfBtn.href = safePDF;
+        openPdfBtn.style.display = '';
+      } else {
+        openPdfBtn.style.display = 'none';
+        openPdfBtn.href = '#';
+      }
+
       modal.classList.add('open');
     }
 
@@ -153,13 +212,13 @@
       return best;
     }
 
-    // ✱ CAMBIO: ahora devolvemos [titulo, url, desc]
-    function toTriples(rows) {
+    // ✱ Ahora devolvemos [titulo, media, desc, pdf]
+    function toQuads(rows) {
       rows = rows.map(r => r.map(c => (c||'').trim()));
       const looksHeader = rows.length && rows[0][1] && !/^https?:\/\//i.test(rows[0][1]);
       if (looksHeader) rows = rows.slice(1);
       return rows
-        .map(r => [r[0] || '', r[1] || '', r[2] || ''])   // ✱
+        .map(r => [r[0] || '', r[1] || '', r[2] || '', r[3] || ''])
         .filter(([t,u]) => t && u);
     }
 
@@ -170,8 +229,7 @@
         const raw = cleanText(await res.text());
         const delim = detectDelim(raw);
         const rows = parseWithDelim(raw, delim);
-        const data = toTriples(rows);                      // ✱
-
+        const data = toQuads(rows);
         renderList(data);
       } catch (err) {
         console.error(err);
@@ -187,16 +245,16 @@
         return;
       }
       const frag = document.createDocumentFragment();
-      for (const [title, url, desc] of items) {           // ✱
-        const hint = desc ? desc : trimUrl(url);          // ✱
+      for (const [title, url, desc, pdfUrl] of items) {
+        const hint = desc ? desc : trimUrl(url);
         const btn = document.createElement('button');
         btn.className = 'item';
         btn.type = 'button';
         btn.innerHTML = `
           <div class="title">${escapeHTML(title)}</div>
-          <div class="hint">${escapeHTML(hint)}</div>     <!-- ✱ -->
+          <div class="hint">${escapeHTML(hint)}${pdfUrl ? ' · PDF disponible' : ''}</div>
         `;
-        btn.addEventListener('click', () => openPlayer(title, url));
+        btn.addEventListener('click', () => openPlayer(title, url, pdfUrl));
         frag.appendChild(btn);
       }
       listEl.innerHTML = '';
