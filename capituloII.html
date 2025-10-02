@@ -262,7 +262,7 @@
 
     async function loadCSV() {
       try {
-        const res = await fetch('capitulII.csv', { cache: 'no-store' });
+        const res = await fetch('capituloII.csv', { cache: 'no-store' });
         if (!res.ok) throw new Error('No se pudo cargar capituloII.csv');
         const raw = cleanText(await res.text());
         const delim = detectDelim(raw);
