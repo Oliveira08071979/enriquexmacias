@@ -262,7 +262,7 @@
 
     async function loadCSV() {
       try {
-        const res = await fetch('Amsterda.csv', { cache: 'no-store' });
+        const res = await fetch('Amsterdam.csv', { cache: 'no-store' });
         if (!res.ok) throw new Error('No se pudo cargar Amsterdam.csv');
         const raw = cleanText(await res.text());
         const delim = detectDelim(raw);
