@@ -5,15 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>INA-GRM</title>
 
-<meta http-equiv="Content-Security-Policy"
-      content="
-        default-src 'self';
-        media-src 'self' https://dl.dropboxusercontent.com https://www.dropbox.com;
-        connect-src 'self' https://dl.dropboxusercontent.com https://www.dropbox.com https://cdnjs.cloudflare.com;
-        img-src 'self' data:;
-        script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
-        style-src 'self' 'unsafe-inline';
-      ">
+ 
+  <!--
+  <meta http-equiv="Content-Security-Policy"
+        content="
+          default-src 'self';
+          connect-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com https://cdnjs.cloudflare.com;
+          img-src 'self' data:;
+          media-src 'self' https://www.dropbox.com https://dl.dropboxusercontent.com;
+          frame-src 'self' blob:;
+          script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+          style-src 'self' 'unsafe-inline';
+          frame-ancestors 'none'
+        ">
+  -->
 
   <style>
     :root { color-scheme: dark light; }
