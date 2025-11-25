@@ -178,6 +178,11 @@
             media.disablePictureInPicture = true;
           }
         } catch {}
+			if (media) {
+  media.addEventListener('error', () => {
+    console.log('MEDIA ERROR ➜', media.error, 'src =', media.src);
+  });
+}
       }
 
       if (safePDF) {
